@@ -1,0 +1,32 @@
+
+[general]
+  log_level = 3
+  log_json = true
+
+[logging]
+  level = "trace"
+  json = true
+
+[sqlite]
+  path = "sqlite:///home/root/mydb.sqlite"
+  max_open_connections = 10
+
+[integration]
+  enabled = ["postgres"]
+
+  [integration.settings]
+    mixed = [1, "two", 3.12, false]
+
+  [integration.mqtt]
+    server = "tcp://tomlinc.server:1883/"
+    qos = 1
+
+    [integration.mqtt.client]
+      ca_cert = "another_cert_file.ca"
+      enabled = false
+
+[backend]
+  type = "concentratord"
+
+  [backend.basic_station]
+    frequency = 928000000

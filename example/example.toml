@@ -1,0 +1,33 @@
+[general]
+log_level=4
+log_json=false
+
+[logging]
+  level="debug"
+  json=false
+
+[sqlite]
+  path="sqlite:///mnt/chirpstack/db/chirpstack.sqlite"
+  max_open_connections=4
+
+[integration]
+  enabled = [
+    "mqtt",
+  ]
+
+  [integration.settings]
+    mixed = [1, "two", 3.123, false]
+
+  [integration.mqtt]
+    server="tcp://localhost:1883/"
+    qos=3
+
+    [integration.mqtt.client]
+      ca_cert="my_cert_file.ca"
+      enabled=true
+
+[backend]
+type="basic_station"
+
+  [backend.basic_station]
+  frequency=915000000

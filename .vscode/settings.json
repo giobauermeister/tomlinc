@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "tomlinc.h": "c",
+        "tomlinc_internal.h": "c",
+        "stdio.h": "c"
+    }
+}
