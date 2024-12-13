@@ -1,20 +1,14 @@
 #ifndef TOMLINC_INTERNAL_H
 #define TOMLINC_INTERNAL_H
 
+#include "tomlinc.h"
 #include <stdio.h>
 #include <stddef.h>
-
-typedef enum {
-    TOML_VALUE_INT,
-    TOML_VALUE_FLOAT,
-    TOML_VALUE_STRING,
-    TOML_VALUE_BOOL,
-    TOML_VALUE_ARRAY
-} TomlValueType;
 
 typedef struct TomlArray {
     void **values;
     TomlValueType *types;
+    size_t *float_precisions;
     size_t count;
 } TomlArray;
 

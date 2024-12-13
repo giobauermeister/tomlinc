@@ -82,6 +82,7 @@ static TomlArray *parse_array(const char *line, FILE *file) {
 
     array->values = NULL;
     array->types = NULL;
+    array->float_precisions = NULL;
     array->count = 0;
 
     size_t buffer_size = strlen(line) + 1;
@@ -254,25 +255,46 @@ static TomlArray *parse_array(const char *line, FILE *file) {
 
             content += (content[0] == 't') ? 4 : 5; // Move past "true" or "false"
         } else if (isdigit((unsigned char)*content) || (*content == '-' && isdigit((unsigned char)content[1]))) {
-            char *end_ptr = NULL;
-            float float_value = strtof(content, &end_ptr);
+            // Find the end of this token (comma or end of line)
+            char *comma = strchr(content, ',');
+            size_t token_length = comma ? (size_t)(comma - content) : strlen(content);
 
-            // Check if the number contains a '.' to determine float vs integer
-            if (strchr(content, '.')) {
+            // Extract the first token
+            char *token_str = strndup(content, token_length);
+            if (!token_str) {
+                free(buffer);
+                free_array(array);
+                return NULL;
+            }
+
+            // Determine if it's float or int by checking only token_str
+            if (strchr(token_str, '.')) {
                 // Parse as float
                 float *value = malloc(sizeof(float));
                 if (!value) {
+                    free(token_str);
                     free(buffer);
                     free_array(array);
                     return NULL;
                 }
-                *value = float_value;
+                *value = strtof(token_str, NULL);
 
+                // Calculate the precision
+                size_t precision = 0;
+                char *dot = strchr(token_str, '.');
+                if (dot) {
+                    precision = strlen(dot + 1); // Count characters after the dot
+                }
+
+                // Reallocate precision array
+                size_t *new_precisions = realloc(array->float_precisions, sizeof(size_t) * (array->count + 1));
                 void **new_values = realloc(array->values, sizeof(void *) * (array->count + 1));
                 TomlValueType *new_types = realloc(array->types, sizeof(TomlValueType) * (array->count + 1));
-                if (!new_values || !new_types) {
+                if (!new_values || !new_types || !new_precisions) {
                     free(value);
                     if (new_values) array->values = new_values;
+                    if (new_precisions) array->float_precisions = new_precisions;
+                    free(token_str);
                     free(buffer);
                     free_array(array);
                     return NULL;
@@ -280,40 +302,29 @@ static TomlArray *parse_array(const char *line, FILE *file) {
 
                 array->values = new_values;
                 array->types = new_types;
+                array->float_precisions = new_precisions;
 
                 array->values[array->count] = value;
                 array->types[array->count] = TOML_VALUE_FLOAT;
+                array->float_precisions[array->count] = precision; // Store precision
                 array->count++;
-
-                char *comma = strchr(end_ptr, ',');
-                if (!comma) {
-                    break;
-                } else {
-                    content = trim_whitespace(comma + 1);
-                }
             } else {
                 // Parse as integer
-                int int_value = (int)float_value;  // Convert the float to an int
-                if (float_value != (float)int_value) {
-                    // Safety check: If float value cannot be represented as int
-                    free(buffer);
-                    free_array(array);
-                    return NULL;
-                }
-
                 int *value = malloc(sizeof(int));
                 if (!value) {
+                    free(token_str);
                     free(buffer);
                     free_array(array);
                     return NULL;
                 }
-                *value = int_value;
+                *value = atoi(token_str);
 
                 void **new_values = realloc(array->values, sizeof(void *) * (array->count + 1));
                 TomlValueType *new_types = realloc(array->types, sizeof(TomlValueType) * (array->count + 1));
                 if (!new_values || !new_types) {
                     free(value);
                     if (new_values) array->values = new_values;
+                    free(token_str);
                     free(buffer);
                     free_array(array);
                     return NULL;
@@ -325,13 +336,15 @@ static TomlArray *parse_array(const char *line, FILE *file) {
                 array->values[array->count] = value;
                 array->types[array->count] = TOML_VALUE_INT;
                 array->count++;
+            }
 
-                char *comma = strchr(content, ',');
-                if (!comma) {
-                    break;
-                } else {
-                    content = trim_whitespace(comma + 1);
-                }
+            free(token_str);
+
+            // Move content past the comma if present
+            if (comma) {
+                content = trim_whitespace(comma + 1);
+            } else {
+                content = NULL;
             }
         } else if (*content == ',') {
             // Skip commas
@@ -521,6 +534,7 @@ void free_array(TomlArray *array) {
     }
     free(array->values);
     free(array->types);
+    free(array->float_precisions);
     free(array);
 }
 
@@ -552,80 +566,74 @@ TomlTable *find_table_recursive(TomlTable *root, const char *name) {
 }
 
 void write_table_to_file(FILE *file, const TomlTable *table, int indent, const char *parent_name) {
+    if (!file || !table) return; // Ensure valid pointers
+
     while (table) {
         char full_name[512] = {0};
 
         // Build the full table name
         if (parent_name && *parent_name) {
-            snprintf(full_name, sizeof(full_name), "%s.%s", parent_name, table->name);
+            if (snprintf(full_name, sizeof(full_name), "%s.%s", parent_name, table->name) >= sizeof(full_name)) {
+                fprintf(stderr, "DEBUG: Full name truncated, potential overflow.\n");
+                return;
+            }
         } else {
-            snprintf(full_name, sizeof(full_name), "%s", table->name);
-        }
-
-        // Determine if pure container: an array container with no own data
-        int is_pure_container = (table->is_array_container && !table->pairs && !table->subtables && !table->is_array_of_tables_element);
-
-        // Print blank line for separation (except for pure containers)
-        if (!is_pure_container) {
-            fprintf(file, "\n");
+            strncpy(full_name, table->name, sizeof(full_name) - 1);
         }
 
         // Print table header
-        if (!is_pure_container) {
-            for (int i = 0; i < indent; i++) fprintf(file, "  "); // Two spaces for indentation
-            if (table->is_array_of_tables_element) {
-                fprintf(file, "[[%s]]\n", full_name);
-            } else {
-                fprintf(file, "[%s]\n", full_name);
-            }
-        }
+        for (int i = 0; i < indent; i++) fprintf(file, "  ");
+        fprintf(file, "[%s]\n", full_name);
 
         // Print key-value pairs
         TomlPair *pair = table->pairs;
         while (pair) {
-            for (int i = 0; i < indent + 1; i++) fprintf(file, "  "); // Nested key-value pairs
-            fprintf(file, "%s = ", pair->key);
-
-            if (pair->type == TOML_VALUE_ARRAY) {
-                TomlArray *array = (TomlArray *)pair->value;
-                fprintf(file, "[");
-                for (size_t i = 0; i < array->count; i++) {
-                    if (i > 0) fprintf(file, ", ");
-                    if (array->types[i] == TOML_VALUE_STRING) {
-                        fprintf(file, "\"%s\"", (char *)array->values[i]);
-                    } else if (array->types[i] == TOML_VALUE_INT) {
-                        fprintf(file, "%d", *(int *)array->values[i]);
-                    } else if (array->types[i] == TOML_VALUE_FLOAT) {
-                        float value = *(float *)array->values[i];
-                        if (value == (int)value) {
-                            fprintf(file, "%d", (int)value); // Write integer for whole numbers
-                        } else {
-                            fprintf(file, "%.2f", value); // Write float with two decimals
-                        }
-                    } else if (array->types[i] == TOML_VALUE_BOOL) {
-                        fprintf(file, "%s", *(int *)array->values[i] ? "true" : "false");
-                    }
-                }
-                fprintf(file, "]\n");
-            } else if (pair->type == TOML_VALUE_STRING) {
-                fprintf(file, "\"%s\"\n", (char *)pair->value);
-            } else if (pair->type == TOML_VALUE_INT) {
-                fprintf(file, "%d\n", *(int *)pair->value);
-            } else if (pair->type == TOML_VALUE_FLOAT) {
-                float value = *(float *)pair->value;
-                if (value == (int)value) {
-                    fprintf(file, "%d\n", (int)value); // Write integer for whole numbers
-                } else {
-                    fprintf(file, "%.2f\n", value); // Write float with two decimals
-                }
-            } else if (pair->type == TOML_VALUE_BOOL) {
-                fprintf(file, "%s\n", *(int *)pair->value ? "true" : "false");
+            if (!pair->key) {
+                fprintf(stderr, "DEBUG: Encountered a pair with a NULL key.\n");
+                break;
             }
 
+            for (int i = 0; i < indent + 1; i++) fprintf(file, "  ");
+            fprintf(file, "%s = ", pair->key);
+
+            switch (pair->type) {
+                case TOML_VALUE_STRING:
+                    fprintf(file, "\"%s\"\n", (char *)pair->value);
+                    break;
+                case TOML_VALUE_INT:
+                    fprintf(file, "%d\n", *(int *)pair->value);
+                    break;
+                case TOML_VALUE_FLOAT:
+                    fprintf(file, "%.3f\n", *(float *)pair->value);
+                    break;
+                case TOML_VALUE_BOOL:
+                    fprintf(file, "%s\n", *(int *)pair->value ? "true" : "false");
+                    break;
+                case TOML_VALUE_ARRAY: {
+                    TomlArray *array = (TomlArray *)pair->value;
+                    fprintf(file, "[");
+                    for (size_t i = 0; i < array->count; i++) {
+                        if (i > 0) fprintf(file, ", ");
+                        if (array->types[i] == TOML_VALUE_STRING) {
+                            fprintf(file, "\"%s\"", (char *)array->values[i]);
+                        } else if (array->types[i] == TOML_VALUE_INT) {
+                            fprintf(file, "%d", *(int *)array->values[i]);
+                        } else if (array->types[i] == TOML_VALUE_FLOAT) {
+                            fprintf(file, "%.3f", *(float *)array->values[i]);
+                        } else if (array->types[i] == TOML_VALUE_BOOL) {
+                            fprintf(file, "%s", *(int *)array->values[i] ? "true" : "false");
+                        }
+                    }
+                    fprintf(file, "]\n");
+                    break;
+                }
+                default:
+                    fprintf(stderr, "DEBUG: Unknown pair type: %d\n", pair->type);
+            }
             pair = pair->next;
         }
 
-        // Print subtables (nested tables)
+        // Print subtables
         if (table->subtables) {
             write_table_to_file(file, table->subtables, indent + 1, full_name);
         }

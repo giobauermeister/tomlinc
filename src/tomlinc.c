@@ -1,6 +1,7 @@
 #include "tomlinc.h"
 #include "tomlinc_internal.h"
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -106,80 +107,85 @@ int tomlinc_save_file(const TomlTable *root, const char *filename) {
 }
 
 void tomlinc_print_table(const TomlTable *table, int indent) {
+    static char current_path[1024] = ""; // Static buffer to hold the current path
+
     while (table) {
-        int is_pure_container = (table->is_array_container &&
-                                 !table->pairs &&
-                                 !table->subtables &&
-                                 !table->is_array_of_tables_element);
+        char full_path[1024] = {0};
 
-        if (!is_pure_container) {
-            for (int i = 0; i < indent; i++) printf("  ");
-            if (table->is_array_of_tables_element) {
-                printf("[[%s]]\n", table->name);
-            } else {
-                printf("[%s]\n", table->name);
+        // Append the current table name to the path
+        if (current_path[0] != '\0') {
+            if (snprintf(full_path, sizeof(full_path), "%s.%s", current_path, table->name) >= sizeof(full_path)) {
+                fprintf(stderr, "Path too long, truncating: %s.%s\n", current_path, table->name);
+                return;
             }
+        } else {
+            if (snprintf(full_path, sizeof(full_path), "%s", table->name) >= sizeof(full_path)) {
+                fprintf(stderr, "Path too long, truncating: %s\n", table->name);
+                return;
+            }
+        }
 
-            TomlPair *pair = table->pairs;
-            while (pair) {
-                for (int i = 0; i < indent + 1; i++) printf("  ");
-                printf("%s=", pair->key);
+        // Print the table header
+        for (int i = 0; i < indent; i++) printf("  ");
+        if (table->is_array_of_tables_element) {
+            printf("[[%s]]\n", full_path);
+        } else {
+            printf("[%s]\n", full_path);
+        }
 
-                if (pair->type == TOML_VALUE_ARRAY) {
-                    TomlArray *array = (TomlArray *)pair->value;
-                    printf("[");
-                    for (size_t i = 0; i < array->count; i++) {
-                        if (i > 0) printf(", ");
-                        if (array->types[i] == TOML_VALUE_ARRAY) {
-                            // Nested array
-                            printf("[");
-                            TomlArray *nested_array = (TomlArray *)array->values[i];
-                            for (size_t j = 0; j < nested_array->count; j++) {
-                                if (j > 0) printf(", ");
-                                if (nested_array->types[j] == TOML_VALUE_STRING) {
-                                    printf("\"%s\"", (char *)nested_array->values[j]);
-                                } else if (nested_array->types[j] == TOML_VALUE_INT) {
-                                    printf("%d", *(int *)nested_array->values[j]);
-                                } else if (nested_array->types[j] == TOML_VALUE_FLOAT) {
-                                    printf("%.2f", *(float *)nested_array->values[j]);
-                                } else if (nested_array->types[j] == TOML_VALUE_BOOL) {
-                                    printf("%s", *(int *)nested_array->values[j] ? "true" : "false");
-                                }
-                            }
-                            printf("]");
-                        } else if (array->types[i] == TOML_VALUE_STRING) {
-                            printf("\"%s\"", (char *)array->values[i]);
-                        } else if (array->types[i] == TOML_VALUE_INT) {
-                            printf("%d", *(int *)array->values[i]);
-                        } else if (array->types[i] == TOML_VALUE_FLOAT) {
-                            printf("%.2f", *(float *)array->values[i]);
-                        } else if (array->types[i] == TOML_VALUE_BOOL) {
-                            printf("%s", *(int *)array->values[i] ? "true" : "false");
-                        }
+        // Print key-value pairs
+        TomlPair *pair = table->pairs;
+        while (pair) {
+            for (int i = 0; i < indent + 1; i++) printf("  ");
+            printf("%s = ", pair->key);
+
+            if (pair->type == TOML_VALUE_ARRAY) {
+                TomlArray *array = (TomlArray *)pair->value;
+                printf("[");
+                for (size_t i = 0; i < array->count; i++) {
+                    if (i > 0) printf(", ");
+                    if (array->types[i] == TOML_VALUE_STRING) {
+                        printf("\"%s\"", (char *)array->values[i]);
+                    } else if (array->types[i] == TOML_VALUE_INT) {
+                        printf("%d", *(int *)array->values[i]);
+                    } else if (array->types[i] == TOML_VALUE_FLOAT) {
+                        // Dynamically adjust float precision
+                        int precision = array->float_precisions ? array->float_precisions[i] : 3; // Default to 3 if not set
+                        printf("%.*f", precision, *(float *)array->values[i]);
+                    } else if (array->types[i] == TOML_VALUE_BOOL) {
+                        printf("%s", *(int *)array->values[i] ? "true" : "false");
                     }
-                    printf("]\n");
-                } else if (pair->type == TOML_VALUE_STRING) {
-                    printf("\"%s\"\n", (char *)pair->value);
-                } else if (pair->type == TOML_VALUE_INT) {
-                    printf("%d\n", *(int *)pair->value);
-                } else if (pair->type == TOML_VALUE_FLOAT) {
-                    printf("%f\n", *(float *)pair->value);
-                } else if (pair->type == TOML_VALUE_BOOL) {
-                    printf("%s\n", *(int *)pair->value ? "true" : "false");
                 }
-
-                pair = pair->next;
+                printf("]\n");
+            } else if (pair->type == TOML_VALUE_STRING) {
+                printf("\"%s\"\n", (char *)pair->value);
+            } else if (pair->type == TOML_VALUE_INT) {
+                printf("%d\n", *(int *)pair->value);
+            } else if (pair->type == TOML_VALUE_FLOAT) {
+                // Dynamically adjust float precision for non-array floats
+                printf("%.3f\n", *(float *)pair->value);
+            } else if (pair->type == TOML_VALUE_BOOL) {
+                printf("%s\n", *(int *)pair->value ? "true" : "false");
             }
 
-            if (table->subtables) {
-                tomlinc_print_table(table->subtables, indent + 1);
-            }
+            pair = pair->next;
         }
 
-        if (table->array_of_tables) {
-            tomlinc_print_table(table->array_of_tables, is_pure_container ? indent : indent + 1);
+
+        // Update current path for nested tables
+        char previous_path[1024] = {0};
+        strncpy(previous_path, current_path, sizeof(previous_path) - 1);
+        strncpy(current_path, full_path, sizeof(current_path) - 1);
+
+        // Print subtables
+        if (table->subtables) {
+            tomlinc_print_table(table->subtables, indent + 1);
         }
 
+        // Restore previous path for sibling tables
+        strncpy(current_path, previous_path, sizeof(current_path) - 1);
+
+        // Move to the next table
         table = table->next;
     }
 }
@@ -497,10 +503,15 @@ int tomlinc_array_get_int(void *array_handle, size_t index) {
     return *(int *)array->values[index];
 }
 
-float tomlinc_array_get_float(void *array_handle, size_t index) {
+float tomlinc_array_get_float(void *array_handle, size_t index, int *precision) {
     if (!array_handle) return 0;
     TomlArray *array = (TomlArray *)array_handle;
     if (index >= array->count || array->types[index] != TOML_VALUE_FLOAT) return 0;
+
+    if (precision) {
+        *precision = array->float_precisions[index];
+    }
+
     return *(float *)array->values[index];
 }
 
@@ -511,8 +522,8 @@ int tomlinc_array_get_bool(void *array_handle, size_t index) {
     return *(int *)array->values[index];
 }
 
-int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const char *key, size_t index, void *new_value, const char *value_type) {
-    if (!root_table || !table_path || !key || !new_value || !value_type) {
+int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const char *key, size_t index, void *new_value, TomlValueType value_type) {
+    if (!root_table || !table_path || !key || !new_value) {
         return 0; // Invalid parameters
     }
 
@@ -520,7 +531,7 @@ int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const
     TomlTable *current_table = root_table;
     char *path_copy = strdup(table_path);
     if (!path_copy) {
-        return 0;
+        return 0; // Memory allocation failed
     }
 
     char *token = strtok(path_copy, ".");
@@ -554,37 +565,118 @@ int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const
 
             // Update the value based on the provided value_type
             void *new_entry = NULL;
-            if (strcmp(value_type, "string") == 0) {
-                new_entry = strdup((char *)new_value);
-                array->types[index] = TOML_VALUE_STRING; // Internal type assignment
-            } else if (strcmp(value_type, "int") == 0) {
-                new_entry = malloc(sizeof(int));
-                if (new_entry) {
-                    *(int *)new_entry = *(int *)new_value;
-                }
-                array->types[index] = TOML_VALUE_INT;
-            } else if (strcmp(value_type, "float") == 0) {
-                new_entry = malloc(sizeof(float));
-                if (new_entry) {
-                    *(float *)new_entry = *(float *)new_value;
-                }
-                array->types[index] = TOML_VALUE_FLOAT;
-            } else if (strcmp(value_type, "bool") == 0) {
-                new_entry = malloc(sizeof(int));
-                if (new_entry) {
-                    *(int *)new_entry = *(int *)new_value;
-                }
-                array->types[index] = TOML_VALUE_BOOL;
-            } else {
-                return 0; // Unsupported type
+            switch (value_type) {
+                case TOML_VALUE_STRING:
+                    new_entry = strdup((char *)new_value);
+                    break;
+                case TOML_VALUE_INT:
+                    new_entry = malloc(sizeof(int));
+                    if (new_entry) *(int *)new_entry = *(int *)new_value;
+                    break;
+                case TOML_VALUE_FLOAT:
+                    new_entry = malloc(sizeof(float));
+                    if (new_entry) *(float *)new_entry = *(float *)new_value;
+                    break;
+                case TOML_VALUE_BOOL:
+                    new_entry = malloc(sizeof(int)); // Booleans stored as integers
+                    if (new_entry) *(int *)new_entry = *(int *)new_value;
+                    break;
+                default:
+                    return 0; // Unsupported type
             }
 
             if (!new_entry) {
                 return 0; // Memory allocation failed
             }
 
+            // Update the array
             array->values[index] = new_entry;
+            array->types[index] = value_type; // Update the type
             return 1; // Successfully updated
+        }
+        pair = pair->next;
+    }
+
+    return 0; // Key not found or not an array
+}
+
+int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const char *key, void *new_value, TomlValueType value_type) {
+    if (!root_table || !table_path || !key || !new_value) {
+        return 0; // Invalid parameters
+    }
+
+    // Find the target table
+    TomlTable *current_table = root_table;
+    char *path_copy = strdup(table_path);
+    if (!path_copy) {
+        return 0;
+    }
+
+    char *token = strtok(path_copy, ".");
+    while (token && current_table) {
+        current_table = find_table_recursive(current_table, token);
+        token = strtok(NULL, ".");
+    }
+
+    free(path_copy);
+
+    if (!current_table) {
+        return 0; // Table not found
+    }
+
+    // Find the array
+    TomlPair *pair = current_table->pairs;
+    while (pair) {
+        if (strcmp(pair->key, key) == 0 && pair->type == TOML_VALUE_ARRAY) {
+            TomlArray *array = (TomlArray *)pair->value;
+
+            // Extend the array
+            void **new_values = realloc(array->values, sizeof(void *) * (array->count + 1));
+            TomlValueType *new_types = realloc(array->types, sizeof(TomlValueType) * (array->count + 1));
+            if (!new_values || !new_types) {
+                if (new_values) array->values = new_values;
+                return 0; // Memory allocation failed
+            }
+
+            array->values = new_values;
+            array->types = new_types;
+
+            // Add the new value based on its type
+            void *new_entry = NULL;
+            switch (value_type) {
+                case TOML_VALUE_STRING:
+                    new_entry = strdup((char *)new_value);
+                    break;
+                case TOML_VALUE_INT:
+                    new_entry = malloc(sizeof(int));
+                    if (new_entry) {
+                        *(int *)new_entry = *(int *)new_value;
+                    }
+                    break;
+                case TOML_VALUE_FLOAT:
+                    new_entry = malloc(sizeof(float));
+                    if (new_entry) {
+                        *(float *)new_entry = *(float *)new_value;
+                    }
+                    break;
+                case TOML_VALUE_BOOL:
+                    new_entry = malloc(sizeof(int));
+                    if (new_entry) {
+                        *(int *)new_entry = *(int *)new_value;
+                    }
+                    break;
+                default:
+                    return 0; // Unsupported type
+            }
+
+            if (!new_entry) {
+                return 0; // Memory allocation failed
+            }
+
+            array->values[array->count] = new_entry;
+            array->types[array->count] = value_type;
+            array->count++; // Increment the count
+            return 1; // Successfully added
         }
         pair = pair->next;
     }
