@@ -453,7 +453,7 @@ void *tomlinc_get_array_from_table(const TomlTable *root_table, const char *tabl
     return NULL;
 }
 
-size_t tomlinc_array_size(void *array_handle) {
+size_t tomlinc_get_array_size(void *array_handle) {
     if (!array_handle) return 0;
     TomlArray *array = (TomlArray *)array_handle;
     return array->count;

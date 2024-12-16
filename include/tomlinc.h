@@ -28,7 +28,7 @@ int tomlinc_set_int_value(TomlTable *root_table, const char *table_path, const c
 int tomlinc_get_bool_value(TomlTable *root_table, const char *table_path, const char *key, int *result);
 int tomlinc_set_bool_value(TomlTable *root_table, const char *table_path, const char *key, int new_value);
 void *tomlinc_get_array_from_table(const TomlTable *root_table, const char *table_path, const char *key);
-size_t tomlinc_array_size(void *array_handle);
+size_t tomlinc_get_array_size(void *array_handle);
 int tomlinc_array_value_is_string(void *array_handle, size_t index);
 int tomlinc_array_value_is_int(void *array_handle, size_t index);
 int tomlinc_array_value_is_float(void *array_handle, size_t index);

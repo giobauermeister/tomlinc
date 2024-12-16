@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
     void *enabled_array = tomlinc_get_array_from_table(toml_file, "integration", "enabled");
     if (enabled_array) {
         printf("[integration] enabled: [");
-        for (size_t i = 0; i < tomlinc_array_size(enabled_array); i++) {
+        for (size_t i = 0; i < tomlinc_get_array_size(enabled_array); i++) {
             if (i > 0) printf(", ");
             if (tomlinc_array_value_is_string(enabled_array, i)) {
                 printf("\"%s\"", tomlinc_array_get_string(enabled_array, i));
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
     void *mixed_array = tomlinc_get_array_from_table(toml_file, "integration.settings", "mixed");
     if (mixed_array) {
         printf("[integration.settings] get array from mixed: [");
-        for (size_t i = 0; i < tomlinc_array_size(mixed_array); i++) {
+        for (size_t i = 0; i < tomlinc_get_array_size(mixed_array); i++) {
             if (i > 0) printf(", ");
             if (tomlinc_array_value_is_string(mixed_array, i)) {
                 printf("\"%s\"", tomlinc_array_get_string(mixed_array, i));
