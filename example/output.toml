@@ -8,9 +8,9 @@
   path = "sqlite:///home/root/mydb.sqlite"
   max_open_connections = 10
 [integration]
-  enabled = ["postgres", "mqtt", "mysql"]
+  enabled = ["postgres", "mqtt", "mysql", 42, 3.1234, true]
   [integration.settings]
-    mixed = ["three", 2, 1.123, true]
+    mixed = ["three", 2, 1.12345, true]
   [integration.mqtt]
     server = "tcp://tomlinc.server:1883/"
     qos = 1

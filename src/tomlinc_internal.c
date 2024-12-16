@@ -604,7 +604,7 @@ void write_table_to_file(FILE *file, const TomlTable *table, int indent, const c
                     fprintf(file, "%d\n", *(int *)pair->value);
                     break;
                 case TOML_VALUE_FLOAT:
-                    fprintf(file, "%.3f\n", *(float *)pair->value);
+                    fprintf(file, "%.6g\n", *(float *)pair->value);
                     break;
                 case TOML_VALUE_BOOL:
                     fprintf(file, "%s\n", *(int *)pair->value ? "true" : "false");
@@ -619,7 +619,7 @@ void write_table_to_file(FILE *file, const TomlTable *table, int indent, const c
                         } else if (array->types[i] == TOML_VALUE_INT) {
                             fprintf(file, "%d", *(int *)array->values[i]);
                         } else if (array->types[i] == TOML_VALUE_FLOAT) {
-                            fprintf(file, "%.3f", *(float *)array->values[i]);
+                            fprintf(file, "%.6g", *(float *)array->values[i]);
                         } else if (array->types[i] == TOML_VALUE_BOOL) {
                             fprintf(file, "%s", *(int *)array->values[i] ? "true" : "false");
                         }

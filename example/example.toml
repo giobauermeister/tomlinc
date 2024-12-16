@@ -16,7 +16,7 @@ log_json=false
   ]
 
   [integration.settings]
-    mixed = [1, "two", 3.123, false]
+    mixed = [1, "two", 3.1234, false]
 
   [integration.mqtt]
     server="tcp://localhost:1883/"

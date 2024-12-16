@@ -112,7 +112,7 @@ void tomlinc_print_table(const TomlTable *table, int indent) {
     while (table) {
         char full_path[1024] = {0};
 
-        // Append the current table name to the path
+        // Build the full table name
         if (current_path[0] != '\0') {
             if (snprintf(full_path, sizeof(full_path), "%s.%s", current_path, table->name) >= sizeof(full_path)) {
                 fprintf(stderr, "Path too long, truncating: %s.%s\n", current_path, table->name);
@@ -149,9 +149,8 @@ void tomlinc_print_table(const TomlTable *table, int indent) {
                     } else if (array->types[i] == TOML_VALUE_INT) {
                         printf("%d", *(int *)array->values[i]);
                     } else if (array->types[i] == TOML_VALUE_FLOAT) {
-                        // Dynamically adjust float precision
-                        int precision = array->float_precisions ? array->float_precisions[i] : 3; // Default to 3 if not set
-                        printf("%.*f", precision, *(float *)array->values[i]);
+                        // Use the same format specifier as file writing
+                        printf("%.6g", *(float *)array->values[i]);
                     } else if (array->types[i] == TOML_VALUE_BOOL) {
                         printf("%s", *(int *)array->values[i] ? "true" : "false");
                     }
@@ -162,15 +161,14 @@ void tomlinc_print_table(const TomlTable *table, int indent) {
             } else if (pair->type == TOML_VALUE_INT) {
                 printf("%d\n", *(int *)pair->value);
             } else if (pair->type == TOML_VALUE_FLOAT) {
-                // Dynamically adjust float precision for non-array floats
-                printf("%.3f\n", *(float *)pair->value);
+                // Use the same format specifier as file writing
+                printf("%.6g\n", *(float *)pair->value);
             } else if (pair->type == TOML_VALUE_BOOL) {
                 printf("%s\n", *(int *)pair->value ? "true" : "false");
             }
 
             pair = pair->next;
         }
-
 
         // Update current path for nested tables
         char previous_path[1024] = {0};
@@ -183,7 +181,7 @@ void tomlinc_print_table(const TomlTable *table, int indent) {
         }
 
         // Restore previous path for sibling tables
-        strncpy(current_path, previous_path, sizeof(current_path) - 1);
+        strncpy(current_path, previous_path, sizeof(previous_path) - 1);
 
         // Move to the next table
         table = table->next;
@@ -504,14 +502,12 @@ int tomlinc_array_get_int(void *array_handle, size_t index) {
 }
 
 float tomlinc_array_get_float(void *array_handle, size_t index, int *precision) {
-    if (!array_handle) return 0;
+    if (!array_handle) return 0.0f;
     TomlArray *array = (TomlArray *)array_handle;
-    if (index >= array->count || array->types[index] != TOML_VALUE_FLOAT) return 0;
-
+    if (index >= array->count || array->types[index] != TOML_VALUE_FLOAT) return 0.0f;
     if (precision) {
         *precision = array->float_precisions[index];
     }
-
     return *(float *)array->values[index];
 }
 
@@ -602,6 +598,7 @@ int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const
 
 int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const char *key, void *new_value, TomlValueType value_type) {
     if (!root_table || !table_path || !key || !new_value) {
+        fprintf(stderr, "DEBUG: Invalid parameters passed to tomlinc_array_add_value.\n");
         return 0; // Invalid parameters
     }
 
@@ -609,7 +606,8 @@ int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const
     TomlTable *current_table = root_table;
     char *path_copy = strdup(table_path);
     if (!path_copy) {
-        return 0;
+        fprintf(stderr, "DEBUG: Memory allocation failed for path_copy.\n");
+        return 0; // Memory allocation failed
     }
 
     char *token = strtok(path_copy, ".");
@@ -621,6 +619,7 @@ int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const
     free(path_copy);
 
     if (!current_table) {
+        fprintf(stderr, "DEBUG: Table '%s' not found.\n", table_path);
         return 0; // Table not found
     }
 
@@ -633,8 +632,23 @@ int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const
             // Extend the array
             void **new_values = realloc(array->values, sizeof(void *) * (array->count + 1));
             TomlValueType *new_types = realloc(array->types, sizeof(TomlValueType) * (array->count + 1));
+            size_t *new_precisions = NULL;
+
+            if (value_type == TOML_VALUE_FLOAT) {
+                new_precisions = realloc(array->float_precisions, sizeof(size_t) * (array->count + 1));
+                if (!new_precisions) {
+                    fprintf(stderr, "DEBUG: Memory allocation failed for float_precisions.\n");
+                    free(new_values);
+                    free(new_types);
+                    return 0; // Memory allocation failed for precision
+                }
+                array->float_precisions = new_precisions;
+            }
+
             if (!new_values || !new_types) {
-                if (new_values) array->values = new_values;
+                fprintf(stderr, "DEBUG: Memory allocation failed for array values or types.\n");
+                if (new_values) free(new_values);
+                if (new_types) free(new_types);
                 return 0; // Memory allocation failed
             }
 
@@ -653,12 +667,23 @@ int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const
                         *(int *)new_entry = *(int *)new_value;
                     }
                     break;
-                case TOML_VALUE_FLOAT:
+                case TOML_VALUE_FLOAT: {
                     new_entry = malloc(sizeof(float));
                     if (new_entry) {
                         *(float *)new_entry = *(float *)new_value;
+
+                        // Calculate and store precision
+                        char buffer[32];
+                        snprintf(buffer, sizeof(buffer), "%.10f", *(float *)new_value);
+                        char *dot = strchr(buffer, '.');
+                        if (dot) {
+                            array->float_precisions[array->count] = strlen(dot + 1);
+                        } else {
+                            array->float_precisions[array->count] = 0; // No precision
+                        }
                     }
                     break;
+                }
                 case TOML_VALUE_BOOL:
                     new_entry = malloc(sizeof(int));
                     if (new_entry) {
@@ -675,11 +700,18 @@ int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const
 
             array->values[array->count] = new_entry;
             array->types[array->count] = value_type;
+
+            // Ensure precision array is initialized correctly for non-float types
+            if (value_type != TOML_VALUE_FLOAT && array->float_precisions) {
+                array->float_precisions[array->count] = 0;
+            }
+
             array->count++; // Increment the count
             return 1; // Successfully added
         }
         pair = pair->next;
     }
 
+    fprintf(stderr, "DEBUG: Key '%s' not found or not an array.\n", key);
     return 0; // Key not found or not an array
 }

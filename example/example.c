@@ -154,9 +154,27 @@ int main(int argc, char *argv[]) {
     }
     char *new_value_string = "mysql";
     if (tomlinc_array_add_value(toml_file, "integration", "enabled", new_value_string, TOML_VALUE_STRING)) {
-        printf("Successfully added 'mysql' to the array.\n");
+        printf("[integration] enabled: %s\n", new_value_string);
     } else {
         printf("Failed to add 'mysql' to the array.\n");
+    }
+    int new_value_int = 42;
+    if (tomlinc_array_add_value(toml_file, "integration", "enabled", &new_value_int, TOML_VALUE_INT)) {
+        printf("[integration] enabled: %d\n", new_value_int);
+    } else {
+        printf("Failed to add 42 to the array.\n");
+    }
+    float new_value_float = 3.1234f;
+    if (tomlinc_array_add_value(toml_file, "integration", "enabled", &new_value_float, TOML_VALUE_FLOAT)) {
+        printf("[integration] enabled: %.*f\n", 4, new_value_float);
+    } else {
+        printf("Failed to add 3.12345 to the array.\n");
+    }
+    int new_value_bool = true;
+    if (tomlinc_array_add_value(toml_file, "integration", "enabled", &new_value_bool, TOML_VALUE_BOOL)) {
+        printf("Successfully added true to the array.\n");
+    } else {
+        printf("Failed to add true to the array.\n");
     }
 
     /*
@@ -166,7 +184,7 @@ int main(int argc, char *argv[]) {
 
     void *mixed_array = tomlinc_get_array_from_table(toml_file, "integration.settings", "mixed");
     if (mixed_array) {
-        printf("[integration.settings] mixed: [");
+        printf("[integration.settings] get array from mixed: [");
         for (size_t i = 0; i < tomlinc_array_size(mixed_array); i++) {
             if (i > 0) printf(", ");
             if (tomlinc_array_value_is_string(mixed_array, i)) {
@@ -188,27 +206,27 @@ int main(int argc, char *argv[]) {
 
     char *new_string_value = "three";
     if(tomlinc_array_set_value(toml_file, "integration.settings", "mixed", 0, new_string_value, TOML_VALUE_STRING)) {
-        printf("[integration.settings] mixed[0]: %s\n", new_string_value);
+        printf("[integration.settings] set mixed[0]: %s\n", new_string_value);
     } else {
         printf("[integration.settings] Failed to update mixed\n");
     }
     int new_int_value = 2;
     if(tomlinc_array_set_value(toml_file, "integration.settings", "mixed", 1, &new_int_value, TOML_VALUE_INT)) {
-        printf("[integration.settings] mixed[1]: %d\n", new_int_value);
+        printf("[integration.settings] set mixed[1]: %d\n", new_int_value);
     } else {
         printf("[integration.settings] Failed to update mixed\n");
     }
 
-    float new_float_value = 1.123;
+    float new_float_value = 1.12345;
     if(tomlinc_array_set_value(toml_file, "integration.settings", "mixed", 2, &new_float_value, TOML_VALUE_FLOAT)) {
-        printf("[integration.settings] mixed[2]: %f\n", new_float_value);
+        printf("[integration.settings] set mixed[2]: %.*f\n", 5, new_float_value);
     } else {
         printf("[integration.settings] Failed to update mixed\n");
     }  
 
     int new_bool_value = true;
     if(tomlinc_array_set_value(toml_file, "integration.settings", "mixed", 3, &new_bool_value, TOML_VALUE_BOOL)) {
-        printf("[integration.settings] mixed[3]: %s\n", new_bool_value ? "true":"false");
+        printf("[integration.settings] set mixed[3]: %s\n", new_bool_value ? "true":"false");
     } else {
         printf("[integration.settings] Failed to update mixed\n");
     } 
