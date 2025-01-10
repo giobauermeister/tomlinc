@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
     TomlTable *toml_file = tomlinc_open_file("my_file.toml");
     if (!toml_file) {
         fprintf(stderr, "Failed to open TOML file: %s\n", argv[1]);
-        return 1;
+        return -1;
     }
 
     tomlinc_print_table(toml_file, 0);
@@ -22,19 +22,19 @@ int main(int argc, char *argv[]) {
         log_level=4
     */
     int log_level;
-    if (tomlinc_get_int_value(toml_file, "general", "log_level", &log_level)) {
+    if (tomlinc_get_int_value(toml_file, "general", "log_level", &log_level) == 0) {
         printf("[general] get log_level: %d\n", log_level);
     } else {
         printf("[general] Failed to get log_level.\n");
     }
     log_level = 3;
-    if (tomlinc_set_int_value(toml_file, "general", "log_level", log_level)) {
+    if (tomlinc_set_int_value(toml_file, "general", "log_level", log_level) == 0) {
         printf("[general] set log_level: %d\n", log_level);
     } else {
         printf("[general] Failed to set log_level value.\n");
     }
 
-    if (tomlinc_save_file(toml_file, "output.toml")) {
+    if (tomlinc_save_file(toml_file, "output.toml") == 0) {
         printf("TOML file updated successfully\n");
     }
 
@@ -53,13 +53,13 @@ You can also get values from a subtable using the table path for example:
 
 ```
 int qos;
-if (tomlinc_get_int_value(toml_file, "integration.mqtt", "qos", &qos)) {
+if (tomlinc_get_int_value(toml_file, "integration.mqtt", "qos", &qos) == 0) {
     printf("[integration.mqtt] get qos: %d\n", qos);
 } else {
     printf("[integration.mqtt] Failed to get qos\n");
 }
 qos = 1;
-if (tomlinc_set_int_value(toml_file, "integration.mqtt", "qos", qos)) {
+if (tomlinc_set_int_value(toml_file, "integration.mqtt", "qos", qos) == 0) {
     printf("[integration.mqtt] set qos: %d\n", qos);
 } else {
     printf("[integration.mqtt] Failed to set qos\n");
@@ -101,15 +101,15 @@ int tomlinc_set_bool_value(TomlTable *root_table, const char *table_path, const 
 - Arrays getters and setters
 ```
 void *tomlinc_get_array_from_table(const TomlTable *root_table, const char *table_path, const char *key);
-size_t tomlinc_get_array_size(void *array_handle);
+int tomlinc_get_array_size(void *array_handle, size_t *size);
 int tomlinc_array_value_is_string(void *array_handle, size_t index);
 int tomlinc_array_value_is_int(void *array_handle, size_t index);
 int tomlinc_array_value_is_float(void *array_handle, size_t index);
 int tomlinc_array_value_is_bool(void *array_handle, size_t index);
 const char *tomlinc_array_get_string(void *array_handle, size_t index);
-int tomlinc_array_get_int(void *array_handle, size_t index);
-float tomlinc_array_get_float(void *array_handle, size_t index, int *precision);
-int tomlinc_array_get_bool(void *array_handle, size_t index);
+int tomlinc_array_get_int(void *array_handle, size_t index, int *result);
+int tomlinc_array_get_float(void *array_handle, size_t index, float *result, int *precision);
+int tomlinc_array_get_bool(void *array_handle, size_t index, int *result);
 int tomlinc_array_set_value(TomlTable *root_table, const char *table_path, const char *key, size_t index, void *new_value, TomlValueType value_type);
 int tomlinc_array_add_value(TomlTable *root_table, const char *table_path, const char *key, void *new_value, TomlValueType value_type);
 ```
