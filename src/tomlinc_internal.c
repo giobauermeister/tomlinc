@@ -594,7 +594,7 @@ void write_table_to_file(FILE *file, const TomlTable *table, int indent, const c
             }
 
             for (int i = 0; i < indent + 1; i++) fprintf(file, "  ");
-            fprintf(file, "%s = ", pair->key);
+            fprintf(file, "%s=", pair->key);
 
             switch (pair->type) {
                 case TOML_VALUE_STRING:
